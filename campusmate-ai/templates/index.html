@@ -107,16 +107,36 @@ const doOcr = b => run(b, async () => {
   const timetable = $("timetableOut");
   timetable.innerHTML = "";
 
-  if (r.timetable) {
-    if (typeof r.timetable === "string") {
-      timetable.textContent = r.timetable;
-    } else {
-      const pre = document.createElement("pre");
-      pre.style.whiteSpace = "pre-wrap";
-      pre.textContent = JSON.stringify(r.timetable, null, 2);
-      timetable.appendChild(pre);
-    }
-  }
+  
+if (Array.isArray(r.timetable) && r.timetable.length > 0) {
+    const table = document.createElement("table");
+    table.style.cssText = "width:100%;border-collapse:collapse;margin-top:15px;";
+
+    const columns = ["day", "time", "subject", "teacher", "room"];
+    const header = document.createElement("tr");
+
+    columns.forEach(col => {
+        const th = document.createElement("th");
+        th.textContent = col.toUpperCase();
+        th.style.cssText = "border:1px solid #ccc;padding:10px;background:#dbeafe;";
+        header.appendChild(th);
+    });
+    table.appendChild(header);
+
+    r.timetable.forEach(item => {
+        const tr = document.createElement("tr");
+        columns.forEach(col => {
+            const td = document.createElement("td");
+            td.textContent = item[col] || "-";
+            td.style.cssText = "border:1px solid #ccc;padding:8px;";
+            tr.appendChild(td);
+        });
+        table.appendChild(tr);
+    });
+
+    timetable.appendChild(table);
+}
+
 });
 
 const doTr=b=>run(b,async()=>{const r=await post("/api/translate",{text:$("trIn").value,to:$("to").value});plain("trOut",r.text||r.error)});
