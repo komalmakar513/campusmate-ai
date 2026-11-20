@@ -86,62 +86,66 @@ def dashboard():
 def format_timetable(text):
     import re
 
-    days = {
-        "mon": "Monday",
-        "tue": "Tuesday",
-        "wed": "Wednesday",
-        "thu": "Thursday",
-        "fri": "Friday",
-        "sat": "Saturday",
-        "sun": "Sunday"
-    }
+    days = ["Monday", "Tuesday", "Wednesday",
+            "Thursday", "Friday", "Saturday", "Sunday"]
 
     rows = []
-    current_day = ""
     current_time = ""
+    current_day = ""
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
-
         if not line:
             continue
 
-        day_match = re.match(
-            r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?$",
-            line,
-            re.IGNORECASE
+        day_match = re.fullmatch(
+            r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(day)?",
+            line, re.I
         )
-
         if day_match:
-            current_day = days[day_match.group(1)[:3].lower()]
+            current_day = days[
+                ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                .index(day_match.group(1)[:3].lower())
+            ]
             continue
 
         time_match = re.search(
-            r"\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b",
-            line,
-            re.IGNORECASE
+            r"\b\d{1,2}:\d{2}(?:\s*[AP]M)?"
+            r"(?:\s*[-–]\s*\d{1,2}:\d{2}(?:\s*[AP]M)?)?",
+            line, re.I
         )
 
-        if time_match:
+        if time_match and re.fullmatch(
+            r"[\d:\sAPMapm\-–]+", line
+        ):
             current_time = time_match.group()
-            if line == current_time:
-                continue
+            continue
 
+        subject_match = re.search(
+            r"\b24[A-Z]{2,5}[-–]\d{3}\b", line, re.I
+        )
         room_match = re.search(
-            r"(?:Block[-\s]*)?[A-Z]?\d?[-\s]*\d{3}",
-            line,
-            re.IGNORECASE
+            r"(?:Block[-\s]*)?[A-Z]\d?[-–]\d{3}",
+            line, re.I
         )
 
-        rows.append({
-            "day": current_day,
-            "time": current_time,
-            "subject": line,
-            "teacher": "",
-            "room": room_match.group() if room_match else ""
-        })
+        if subject_match:
+            teacher_match = re.search(
+                r"\bBy\s+(.+)$", line, re.I
+            )
+
+            rows.append({
+                "day": current_day,
+                "time": current_time,
+                "subject": subject_match.group(),
+                "teacher": teacher_match.group(1).strip()
+                           if teacher_match else "",
+                "room": room_match.group()
+                        if room_match else ""
+            })
 
     return rows
+
 
 
 @app.post("/api/ocr")
