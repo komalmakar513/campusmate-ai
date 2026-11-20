@@ -82,6 +82,34 @@ def dashboard():
 
 
 
+def format_timetable(text):
+    import re
+
+    rows = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        time_match = re.search(
+            r"\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b",
+            line, re.I
+        )
+        room_match = re.search(
+            r"\b(?:Block[-\s]*)?[A-Z]\d?[-\s]*\d{3}\b",
+            line, re.I
+        )
+
+        rows.append({
+            "day": "",
+            "time": time_match.group() if time_match else "",
+            "subject": line,
+            "teacher": "",
+            "room": room_match.group() if room_match else ""
+        })
+
+    return rows
+
 @app.post("/api/ocr")
 def ocr():
     f = request.files.get("image")
@@ -129,9 +157,14 @@ def ocr():
             for line in block.get("lines", [])
         ]
 
+        
+        text = "\n".join(lines) or "No text found"
+
         return jsonify(
-            text="\n".join(lines) or "No text found"
+            text=text,
+            timetable=format_timetable(text)
         )
+
 
     except requests.RequestException as e:
         return jsonify(error=str(e)), 502

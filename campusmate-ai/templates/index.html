@@ -55,7 +55,11 @@ pre{white-space:pre-wrap;font:inherit;margin:0}
   <button class="go" onclick="sendFb(this)">Analyse feedback</button><div id="fbOut"></div></div>
 
  <div class="pane" id="ocr"><p class="hint">Upload a photo of a notice or timetable. AI pulls out the text.</p>
-  <input type="file" id="img" accept="image/*"><button class="go" onclick="doOcr(this)">Read text</button><div id="ocrOut"></div></div>
+  <input type="file" id="img" accept="image/*">
+<button class="go" onclick="doOcr(this)">Read text</button>
+<div id="ocrOut"></div>
+<div id="timetableOut"></div>
+</div>
 
  <div class="pane" id="tr"><label for="trIn">Text to translate</label>
   <textarea id="trIn" rows="3" placeholder="Type or paste text"></textarea>
@@ -79,8 +83,42 @@ const sendFb=b=>run(b,async()=>{const r=await post("/api/feedback",{text:$("fbIn
  if(r.error)return plain("fbOut",r.error);
  $("fbOut").innerHTML=`<div class="note ${r.sentiment}"><b>${r.sentiment[0].toUpperCase()+r.sentiment.slice(1)}</b><div class="chips">${r.phrases.map(p=>`<span>${esc(p)}</span>`).join("")}</div></div>`;
  $("fbIn").value="";load()});
-const doOcr=b=>run(b,async()=>{if(!$("img").files[0])return plain("ocrOut","Choose an image first.");
- const f=new FormData();f.append("image",$("img").files[0]);const r=await post("/api/ocr",f,false);plain("ocrOut",r.text||r.error)});
+
+const doOcr = b => run(b, async () => {
+  const file = $("img").files[0];
+
+  if (!file) {
+    return plain("ocrOut", "Choose an image first.");
+  }
+
+  const form = new FormData();
+  form.append("image", file);
+
+  const r = await post("/api/ocr", form, false);
+
+  if (r.error) {
+    plain("ocrOut", r.error);
+    $("timetableOut").innerHTML = "";
+    return;
+  }
+
+  plain("ocrOut", r.text || "No text found");
+
+  const timetable = $("timetableOut");
+  timetable.innerHTML = "";
+
+  if (r.timetable) {
+    if (typeof r.timetable === "string") {
+      timetable.textContent = r.timetable;
+    } else {
+      const pre = document.createElement("pre");
+      pre.style.whiteSpace = "pre-wrap";
+      pre.textContent = JSON.stringify(r.timetable, null, 2);
+      timetable.appendChild(pre);
+    }
+  }
+});
+
 const doTr=b=>run(b,async()=>{const r=await post("/api/translate",{text:$("trIn").value,to:$("to").value});plain("trOut",r.text||r.error)});
 async function load(){const d=await(await fetch("/api/dashboard")).json(),c=d.counts,tot=(c.positive||0)+(c.negative||0)+(c.neutral||0);
  $("stats").innerHTML=["positive","negative","neutral"].map(k=>`<div class="stat ${k}"><b>${c[k]||0}</b>${k}</div>`).join("");
