@@ -80,17 +80,36 @@ def dashboard():
 
 
 @app.post("/api/ocr")  # AI-900: Computer Vision -> read text from notice image
-def ocr():
-    f = request.files.get("image")
-    if not f:
-        return jsonify(error="No image"), 400
-    if DEMO:
-        return jsonify(text="[Demo Mode] Add AI_KEY to read real text from your notice image.")
-    r = requests.post(f"{EP}/computervision/imageanalysis:analyze?api-version=2023-10-01&features=read",
-        headers={**H, "Content-Type": "application/octet-stream"}, data=f.read(), timeout=30)
-    r.raise_for_status()
-    lines = [l["text"] for b in r.json().get("readResult", {}).get("blocks", []) for l in b["lines"]]
+
+    url = f"{EP}/computervision/imageanalysis:analyze"
+    params = {
+        "api-version": "2024-02-01",
+        "features": "read"
+    }
+
+    r = requests.post(
+        url,
+        params=params,
+        headers={
+            **H,
+            "Content-Type": "application/octet-stream"
+        },
+        data=f.read(),
+        timeout=30
+    )
+
+    if not r.ok:
+        return jsonify(error=f"Azure OCR error: {r.status_code}", details=r.text[:500]), 502
+
+    result = r.json()
+    lines = [
+        line["text"]
+        for block in result.get("readResult", {}).get("blocks", [])
+        for line in block.get("lines", [])
+    ]
+
     return jsonify(text="\n".join(lines) or "No text found")
+
 
 
 @app.post("/api/translate")  # AI-900: Translator (English <-> Hindi)
