@@ -5,11 +5,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 app = Flask(__name__)
-EP = os.getenv("AZURE_LANGUAGE_ENDPOINT", "").rstrip("/")
-KEY = os.getenv("AZURE_LANGUAGE_KEY", "")
-VISION_EP = os.getenv("AZURE_VISION_ENDPOINT", "").rstrip("/")
-VISION_KEY = os.getenv("AZURE_VISION_KEY", "")
+EP = (os.getenv("AZURE_LANGUAGE_ENDPOINT") or os.getenv("AI_ENDPOINT", "")).rstrip("/")
+KEY = os.getenv("AZURE_LANGUAGE_KEY") or os.getenv("AI_KEY", "")
+VISION_EP = (os.getenv("AZURE_VISION_ENDPOINT") or os.getenv("AI_ENDPOINT", "")).rstrip("/")
+VISION_KEY = os.getenv("AZURE_VISION_KEY") or os.getenv("AI_KEY", "")
 REGION = os.getenv("AI_REGION", "centralindia")
+TRANSLATOR_EP = (
+    os.getenv("AZURE_TRANSLATOR_ENDPOINT")
+    or "https://api.cognitive.microsofttranslator.com"
+).rstrip("/")
+TRANSLATOR_KEY = os.getenv("AZURE_TRANSLATOR_KEY") or KEY
+TRANSLATOR_REGION = os.getenv("AZURE_TRANSLATOR_REGION") or REGION
+TRANSLATOR_DEMO = not TRANSLATOR_KEY
 DEMO = not (EP and KEY)
 # /home is persistent storage on Azure App Service
 DB = "/tmp/campusmate.db" if os.getenv("VERCEL") or os.path.exists("/var/task") else "campusmate.db"
@@ -52,7 +59,11 @@ def language(kind, text):
 
 @app.get("/")
 def home():
-    return render_template("index.html", demo=DEMO)
+    return render_template(
+        "index.html",
+        demo=DEMO,
+        translator_demo=TRANSLATOR_DEMO
+    )
 
 
 @app.post("/api/feedback")  # AI-900: NLP -> sentiment + key phrases
@@ -358,15 +369,69 @@ def ocr():
 
 @app.post("/api/translate")  # AI-900: Translator (English <-> Hindi)
 def translate():
-    d = request.json or {}
-    text, to = d.get("text", ""), d.get("to", "hi")
-    if DEMO:
+    data = request.get_json(silent=True)
+    d = data if isinstance(data, dict) else {}
+    text = d.get("text", "")
+    to = d.get("to", "hi")
+    if not isinstance(text, str) or not text.strip():
+        return jsonify(error="Enter text to translate."), 400
+    if not isinstance(to, str) or to not in {"hi", "en"}:
+        return jsonify(error="Choose a supported translation language."), 400
+    text = text.strip()
+
+    if TRANSLATOR_DEMO:
         return jsonify(text=f"[Demo Mode] ({to}) {text}")
-    r = requests.post(f"https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to={to}",
-        headers={**H, "Ocp-Apim-Subscription-Region": REGION, "Content-Type": "application/json"},
-        json=[{"Text": text}], timeout=20)
-    r.raise_for_status()
-    return jsonify(text=r.json()[0]["translations"][0]["text"])
+
+    try:
+        response = requests.post(
+            f"{TRANSLATOR_EP}/translate",
+            params={"api-version": "3.0", "to": to},
+            headers={
+                "Ocp-Apim-Subscription-Key": TRANSLATOR_KEY,
+                "Ocp-Apim-Subscription-Region": TRANSLATOR_REGION,
+                "Content-Type": "application/json"
+            },
+            json=[{"Text": text}],
+            timeout=20
+        )
+    except requests.Timeout:
+        return jsonify(error="Azure Translator timed out. Please try again."), 504
+    except requests.ConnectionError:
+        return jsonify(error="Could not connect to Azure Translator."), 503
+    except requests.RequestException:
+        return jsonify(error="Azure Translator request failed. Please try again."), 502
+
+    if not response.ok:
+        if response.status_code in (401, 403):
+            message = (
+                "Azure Translator authentication failed. Check the Translator key "
+                "and region configured in Vercel."
+            )
+        elif response.status_code == 429:
+            message = "Azure Translator quota or rate limit exceeded."
+        elif response.status_code >= 500:
+            message = "Azure Translator is temporarily unavailable. Please try again."
+        else:
+            message = f"Azure Translator rejected the request (HTTP {response.status_code})."
+        return jsonify(error=message), 502
+
+    try:
+        result = response.json()
+    except ValueError:
+        return jsonify(error="Azure Translator returned an invalid response."), 502
+
+    if (
+        not isinstance(result, list)
+        or not result
+        or not isinstance(result[0], dict)
+        or not isinstance(result[0].get("translations"), list)
+        or not result[0]["translations"]
+        or not isinstance(result[0]["translations"][0], dict)
+        or not isinstance(result[0]["translations"][0].get("text"), str)
+    ):
+        return jsonify(error="Azure Translator returned an invalid response."), 502
+
+    return jsonify(text=result[0]["translations"][0]["text"])
 
 
 @app.get("/health")  # used by Azure health checks / monitoring

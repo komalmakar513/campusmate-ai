@@ -55,7 +55,7 @@ pre{white-space:pre-wrap;font:inherit;margin:0}
 </style></head><body>
 <header><div class="wrap"><h1>Campus<mark>Mate</mark> AI</h1>
 <p>Tell the college what's working and what isn't. AI reads your feedback, your notices, and translates both ways.</p>
-<span class="badge">{% if demo %}Demo mode: keyword AI, no Azure key{% else %}Live: Azure AI services{% endif %}</span></div></header>
+<span class="badge">{% if demo and translator_demo %}Demo mode: no Azure AI credentials{% elif demo %}Translator live; other AI features in demo mode{% elif translator_demo %}Translator in demo mode; other Azure AI services live{% else %}Live: Azure AI services{% endif %}</span></div></header>
 <main>
 <section class="card">
  <div class="tabs" role="tablist">
@@ -86,7 +86,14 @@ const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"]/g,c=>(
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
  document.querySelectorAll(".tabs button,.pane").forEach(e=>e.classList.remove("on"));
  b.classList.add("on");$(b.dataset.t).classList.add("on")});
-const post=(u,b,json=true)=>fetch(u,{method:"POST",...(json?{headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}:{body:b})}).then(r=>r.json());
+const post=async(u,b,json=true)=>{
+ const response=await fetch(u,{method:"POST",...(json?{headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}:{body:b})});
+ let data;
+ try{data=await response.json()}catch{throw new Error(`Server returned an invalid response (HTTP ${response.status}).`)}
+ if(!data||typeof data!=="object"||Array.isArray(data))throw new Error(`Server returned an invalid response (HTTP ${response.status}).`);
+ if(!response.ok&&!data.error)throw new Error(`Request failed (HTTP ${response.status}).`);
+ return data
+};
 async function run(btn,fn){btn.disabled=true;const t=btn.textContent;btn.textContent="Working...";
  try{await fn()}catch(e){alert("Something went wrong. Check the terminal for details.")}btn.disabled=false;btn.textContent=t}
 const plain=(id,t)=>$(id).innerHTML=`<div class="note plain"><pre>${esc(t)}</pre></div>`;
@@ -203,7 +210,17 @@ const doOcr = b => run(b, async () => {
 
 });
 
-const doTr=b=>run(b,async()=>{const r=await post("/api/translate",{text:$("trIn").value,to:$("to").value});plain("trOut",r.text||r.error)});
+const doTr=b=>run(b,async()=>{
+ try{
+  const r=await post("/api/translate",{text:$("trIn").value,to:$("to").value});
+  plain("trOut",r.error||r.text||"Translation returned no text.");
+ }catch(e){
+  const message=e instanceof TypeError
+   ?"Could not contact the translation service. Check the deployment and network connection."
+   :e.message||"Translation failed. Please try again.";
+  plain("trOut",message);
+ }
+});
 async function load(){const d=await(await fetch("/api/dashboard")).json(),c=d.counts,tot=(c.positive||0)+(c.negative||0)+(c.neutral||0);
  $("stats").innerHTML=["positive","negative","neutral"].map(k=>`<div class="stat ${k}"><b>${c[k]||0}</b>${k}</div>`).join("");
  $("bar").innerHTML=tot?["positive","neutral","negative"].map(k=>`<div style="width:${(c[k]||0)/tot*100}%;background:var(--${k=="positive"?"pos":k=="negative"?"neg":"neu"})"></div>`).join(""):"";
