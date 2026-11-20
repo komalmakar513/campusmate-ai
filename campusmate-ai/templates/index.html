@@ -128,6 +128,10 @@ const doOcr = b => run(b, async () => {
   const data = r.timetable;
   if (data && data.valid && Array.isArray(data.rows) && data.rows.length) {
     const days = Array.isArray(data.days) ? data.days : [];
+    const hasUnknownDay = data.rows.some(row =>
+      row.unknown_day && (row.unknown_day.subject || row.unknown_day.teacher || row.unknown_day.room)
+    );
+    const columns = hasUnknownDay ? [...days, "-"] : days;
     const wrapper = document.createElement("div");
     wrapper.className = "timetable-scroll";
     const table = document.createElement("table");
@@ -135,7 +139,7 @@ const doOcr = b => run(b, async () => {
 
     const head = document.createElement("thead");
     const header = document.createElement("tr");
-    ["Time", ...days].forEach(label => {
+    ["Time", ...columns].forEach(label => {
         const th = document.createElement("th");
         th.scope = "col";
         th.textContent = label;
@@ -153,11 +157,14 @@ const doOcr = b => run(b, async () => {
         time.textContent = row.time || "";
         tr.appendChild(time);
 
-        days.forEach(day => {
+        columns.forEach(day => {
             const td = document.createElement("td");
-            const cell = row.cells && row.cells[day] || {};
+            const cell = day === "-"
+              ? row.unknown_day || {}
+              : row.cells && row.cells[day] || {};
             const content = document.createElement("div");
             content.className = "timetable-cell";
+            const hasCellData = cell.subject || cell.teacher || cell.room;
             if (cell.subject) {
               const subject = document.createElement("strong");
               subject.textContent = cell.subject;
@@ -171,6 +178,10 @@ const doOcr = b => run(b, async () => {
             if (cell.room) {
               const room = document.createElement("span");
               room.textContent = `Room: ${cell.room}`;
+              content.appendChild(room);
+            } else if (hasCellData) {
+              const room = document.createElement("span");
+              room.textContent = "Room: -";
               content.appendChild(room);
             }
             td.appendChild(content);

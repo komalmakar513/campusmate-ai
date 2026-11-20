@@ -147,17 +147,43 @@ def format_timetable(text, ocr_lines=None):
         if day:
             day_positions.setdefault(day, []).append(line["x"])
 
-    day_centers = sorted(
-        (sum(xs) / len(xs), day) for day, xs in day_positions.items()
+    day_indices = {day: index for index, day in enumerate(days)}
+    day_anchors = sorted(
+        (day_indices[day], sum(xs) / len(xs))
+        for day, xs in day_positions.items()
     )
     time_lines = sorted(
         (line["y"], line["text"], line["x"])
         for line in positioned
         if time_pattern.fullmatch(line["text"])
     )
-    if len(day_centers) < 2 or not time_lines:
+    if len(day_anchors) < 2 or not time_lines:
         result["message"] = "Could not reliably identify timetable day columns and time slots."
         return result
+
+    day_spacings = [
+        (right_x - left_x) / (right_day - left_day)
+        for index, (left_day, left_x) in enumerate(day_anchors)
+        for right_day, right_x in day_anchors[index + 1:]
+    ]
+    day_spacings.sort()
+    day_spacing = day_spacings[len(day_spacings) // 2]
+    if day_spacing <= 0:
+        result["message"] = "Weekday headers do not form a reliable left-to-right grid."
+        return result
+    day_offset = sorted(
+        x - index * day_spacing for index, x in day_anchors
+    )[len(day_anchors) // 2]
+    if any(
+        abs(x - (day_offset + index * day_spacing)) > day_spacing * 0.4
+        for index, x in day_anchors
+    ):
+        result["message"] = "Weekday headers do not form a reliable left-to-right grid."
+        return result
+    day_centers = [
+        (day_offset + index * day_spacing, day)
+        for index, day in enumerate(days)
+    ]
 
     # Time labels belong to the time column to the left of the first day header.
     time_lines = [entry for entry in time_lines if entry[2] < day_centers[0][0]]
@@ -173,25 +199,29 @@ def format_timetable(text, ocr_lines=None):
         }
     } for _, label, _ in time_lines]
     cell_lines = [[[] for _ in days] for _ in rows]
-    day_indices = {day: index for index, day in enumerate(days)}
+    unknown_day_lines = [[] for _ in rows]
 
     for line in positioned:
         normalized = re.sub(r"[^a-z]", "", line["text"].lower())
         if normalized in day_aliases or time_pattern.fullmatch(line["text"]):
             continue
 
-        day_spacing = day_centers[1][0] - day_centers[0][0]
-        left_edge = day_centers[0][0] - day_spacing / 2
-        right_edge = day_centers[-1][0] + (
-            day_centers[-1][0] - day_centers[-2][0]
-        ) / 2
-        if not left_edge <= line["x"] <= right_edge:
-            continue
-
-        day_index = min(
-            range(len(day_centers)),
-            key=lambda index: abs(day_centers[index][0] - line["x"])
+        day_distances = sorted(
+            (abs(center - line["x"]), index)
+            for index, (center, _) in enumerate(day_centers)
         )
+        nearest_distance, day_index = day_distances[0]
+        left_edge = day_centers[day_index][0] - day_spacing / 2
+        right_edge = day_centers[day_index][0] + day_spacing / 2
+        ambiguous_edge = (
+            len(day_distances) > 1
+            and day_distances[1][0] - nearest_distance < day_spacing * 0.1
+        )
+        if (
+            not left_edge <= line["x"] <= right_edge
+            or ambiguous_edge
+        ):
+            day_index = None
 
         row_index = min(
             range(len(time_lines)),
@@ -211,12 +241,15 @@ def format_timetable(text, ocr_lines=None):
             if not lower <= line["y"] <= upper:
                 continue
 
-        day = day_centers[day_index][1]
-        cell_lines[row_index][day_indices[day]].append(line)
+        if day_index is None:
+            unknown_day_lines[row_index].append(line)
+        else:
+            cell_lines[row_index][day_index].append(line)
 
     room_pattern = re.compile(
-        r"\b(?:(?:room|rm|lab|block)\s*(?:no\.?|#)?\s*"
-        r"[A-Z]?\s*[-–]?\s*\d+[A-Z]?|[A-Z][-– ]?\d{2,4}[A-Z]?)\b",
+        r"\b(?:(?:block\s*[- ]?\s*[A-Z](?:\d{1,2}[-–]\d{2,4}|[-–]\d{2,4}))"
+        r"|(?:[A-Z]\d{1,2}[-–]\d{2,4})"
+        r"|(?:room|rm|lab)\s*(?:no\.?|#)?\s*[A-Z]?\d{1,4}(?:[-–]\d{1,4})?)\b",
         re.I
     )
     teacher_pattern = re.compile(
@@ -251,6 +284,8 @@ def format_timetable(text, ocr_lines=None):
     for row_index, row in enumerate(rows):
         for day_index, day in enumerate(days):
             row["cells"][day] = format_cell(cell_lines[row_index][day_index])
+        if unknown_day_lines[row_index]:
+            row["unknown_day"] = format_cell(unknown_day_lines[row_index])
 
     result["rows"] = rows
     result["valid"] = True
