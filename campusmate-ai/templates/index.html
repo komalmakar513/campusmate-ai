@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>CampusMate AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9eff8;--ink:#0f1b3d;--mute:#52607f;--card:#fff;--line:#cfd9ea;--blue:#2447d6;--yel:#ffd23f;--pos:#16a06a;--neg:#e0434b;--neu:#e59f0b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "DM Sans",system-ui,sans-serif}
+h1,h2,h3{font-family:"Bricolage Grotesque","DM Sans",sans-serif;margin:0;letter-spacing:-.02em}
+header{background:var(--ink);color:#fff;padding:28px 20px 56px}
+.wrap{max-width:1040px;margin:0 auto}
+header h1{font-size:clamp(30px,5vw,46px);font-weight:800}
+header h1 mark{background:var(--yel);color:var(--ink);padding:0 8px;border-radius:6px}
+header p{margin:8px 0 0;color:#b9c4e4;max-width:52ch}
+.badge{display:inline-block;margin-top:14px;padding:4px 12px;border-radius:99px;font-size:13px;font-weight:700;background:#ffffff1f}
+main{max-width:1040px;margin:-34px auto 40px;padding:0 16px;display:grid;grid-template-columns:1.25fr 1fr;gap:18px}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 8px 24px #0f1b3d14}
+.tabs{display:flex;gap:6px;margin-bottom:16px;background:var(--bg);padding:5px;border-radius:12px}
+.tabs button{flex:1;border:0;background:none;padding:9px 6px;border-radius:9px;font:700 14px "DM Sans";color:var(--mute);cursor:pointer}
+.tabs button.on{background:var(--ink);color:#fff}
+.pane{display:none}.pane.on{display:block}
+label{font-weight:700;font-size:14px}
+textarea,select,input[type=file]{width:100%;margin:8px 0 12px;padding:12px;border:2px solid var(--line);border-radius:10px;font:inherit;color:var(--ink);background:#fff}
+textarea:focus,select:focus{outline:3px solid #2447d633;border-color:var(--blue)}
+.go{background:var(--blue);color:#fff;border:0;padding:12px 20px;border-radius:10px;font:700 15px "DM Sans";cursor:pointer}
+.go:hover{background:#1a37ad}.go:disabled{opacity:.6}
+.hint{color:var(--mute);font-size:14px;margin:0 0 10px}
+.note{margin-top:16px;padding:16px;border-radius:6px 14px 14px 14px;transform:rotate(-1deg);box-shadow:0 6px 14px #0f1b3d1f;border-top:6px solid #0003}
+.note.positive{background:#c9f2df}.note.negative{background:#ffd5d7}.note.neutral{background:#ffe9b0}.note.plain{background:#eef2fb;transform:none}
+.note b{font:800 22px "Bricolage Grotesque"}
+.chips span{display:inline-block;margin:6px 6px 0 0;padding:3px 10px;border-radius:99px;background:#ffffffb0;border:1px solid #0f1b3d33;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.stat{border-radius:12px;padding:10px;text-align:center;color:#fff}
+.stat b{display:block;font:800 28px "Bricolage Grotesque"}
+.stat.positive{background:var(--pos)}.stat.negative{background:var(--neg)}.stat.neutral{background:var(--neu)}
+.bar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--bg)}
+ul{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:8px;max-height:300px;overflow:auto}
+li{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;border-left:6px solid var(--line)}
+li.positive{border-left-color:var(--pos)}li.negative{border-left-color:var(--neg)}li.neutral{border-left-color:var(--neu)}
+li small{display:block;color:var(--mute)}
+.empty{color:var(--mute);padding:14px 0}
+pre{white-space:pre-wrap;font:inherit;margin:0}
+</style></head><body>
+<header><div class="wrap"><h1>Campus<mark>Mate</mark> AI</h1>
+<p>Tell the college what's working and what isn't. AI reads your feedback, your notices, and translates both ways.</p>
+<span class="badge">{% if demo %}Demo mode: keyword AI, no Azure key{% else %}Live: Azure AI services{% endif %}</span></div></header>
+<main>
+<section class="card">
+ <div class="tabs" role="tablist">
+  <button class="on" data-t="fb">Feedback</button><button data-t="ocr">Notice reader</button><button data-t="tr">Translator</button></div>
+
+ <div class="pane on" id="fb"><label for="fbIn">What's your feedback?</label>
+  <textarea id="fbIn" rows="4" placeholder="Example: The library is great but hostel wifi is very slow."></textarea>
+  <button class="go" onclick="sendFb(this)">Analyse feedback</button><div id="fbOut"></div></div>
+
+ <div class="pane" id="ocr"><p class="hint">Upload a photo of a notice or timetable. AI pulls out the text.</p>
+  <input type="file" id="img" accept="image/*"><button class="go" onclick="doOcr(this)">Read text</button><div id="ocrOut"></div></div>
+
+ <div class="pane" id="tr"><label for="trIn">Text to translate</label>
+  <textarea id="trIn" rows="3" placeholder="Type or paste text"></textarea>
+  <select id="to"><option value="hi">English to Hindi</option><option value="en">Hindi to English</option></select>
+  <button class="go" onclick="doTr(this)">Translate</button><div id="trOut"></div></div>
+</section>
+
+<aside class="card"><h2>Feedback so far</h2>
+ <div class="stats" id="stats"></div><div class="bar" id="bar"></div><ul id="recent"></ul></aside>
+</main>
+<script>
+const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+ document.querySelectorAll(".tabs button,.pane").forEach(e=>e.classList.remove("on"));
+ b.classList.add("on");$(b.dataset.t).classList.add("on")});
+const post=(u,b,json=true)=>fetch(u,{method:"POST",...(json?{headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}:{body:b})}).then(r=>r.json());
+async function run(btn,fn){btn.disabled=true;const t=btn.textContent;btn.textContent="Working...";
+ try{await fn()}catch(e){alert("Something went wrong. Check the terminal for details.")}btn.disabled=false;btn.textContent=t}
+const plain=(id,t)=>$(id).innerHTML=`<div class="note plain"><pre>${esc(t)}</pre></div>`;
+const sendFb=b=>run(b,async()=>{const r=await post("/api/feedback",{text:$("fbIn").value});
+ if(r.error)return plain("fbOut",r.error);
+ $("fbOut").innerHTML=`<div class="note ${r.sentiment}"><b>${r.sentiment[0].toUpperCase()+r.sentiment.slice(1)}</b><div class="chips">${r.phrases.map(p=>`<span>${esc(p)}</span>`).join("")}</div></div>`;
+ $("fbIn").value="";load()});
+const doOcr=b=>run(b,async()=>{if(!$("img").files[0])return plain("ocrOut","Choose an image first.");
+ const f=new FormData();f.append("image",$("img").files[0]);const r=await post("/api/ocr",f,false);plain("ocrOut",r.text||r.error)});
+const doTr=b=>run(b,async()=>{const r=await post("/api/translate",{text:$("trIn").value,to:$("to").value});plain("trOut",r.text||r.error)});
+async function load(){const d=await(await fetch("/api/dashboard")).json(),c=d.counts,tot=(c.positive||0)+(c.negative||0)+(c.neutral||0);
+ $("stats").innerHTML=["positive","negative","neutral"].map(k=>`<div class="stat ${k}"><b>${c[k]||0}</b>${k}</div>`).join("");
+ $("bar").innerHTML=tot?["positive","neutral","negative"].map(k=>`<div style="width:${(c[k]||0)/tot*100}%;background:var(--${k=="positive"?"pos":k=="negative"?"neg":"neu"})"></div>`).join(""):"";
+ $("recent").innerHTML=d.recent.length?d.recent.map(r=>`<li class="${r[1]}">${esc(r[0])}<small>${esc(r[2]||"")}</small></li>`).join(""):'<div class="empty">No feedback yet. Submit the first one.</div>'}
+load();
+</script></body></html>
