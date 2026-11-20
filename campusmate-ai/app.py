@@ -22,11 +22,30 @@ def db():
     return c
 
 
+
 def language(kind, text):
-    r = requests.post(f"{EP}/language/:analyze-text?api-version=2023-04-01", headers=H, timeout=20,
-        json={"kind": kind, "analysisInput": {"documents": [{"id": "1", "text": text}]}})
+    url = f"{EP}/language/:analyze-text"
+    params = {"api-version": "2023-04-01"}
+
+    payload = {
+        "kind": kind,
+        "analysisInput": {
+            "documents": [
+                {"id": "1", "text": text}
+            ]
+        }
+    }
+
+    r = requests.post(
+        url,
+        params=params,
+        headers=H,
+        json=payload,
+        timeout=20
+    )
     r.raise_for_status()
     return r.json()["results"]["documents"][0]
+
 
 
 @app.get("/")
