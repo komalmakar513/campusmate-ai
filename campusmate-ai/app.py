@@ -79,36 +79,60 @@ def dashboard():
     return jsonify(counts=counts, recent=rows)
 
 
-@app.post("/api/ocr")  # AI-900: Computer Vision -> read text from notice image
 
-    url = f"{EP}/computervision/imageanalysis:analyze"
-    params = {
-        "api-version": "2024-02-01",
-        "features": "read"
-    }
+@app.post("/api/ocr")
+def ocr():
+    f = request.files.get("image")
 
-    r = requests.post(
-        url,
-        params=params,
-        headers={
-            **H,
+    if not f:
+        return jsonify(error="No image uploaded"), 400
+
+    if DEMO:
+        return jsonify(
+            text="[Demo Mode] Add Azure AI credentials."
+        )
+
+    try:
+        url = f"{EP}/computervision/imageanalysis:analyze"
+
+        params = {
+            "api-version": "2024-02-01",
+            "features": "read"
+        }
+
+        headers = {
+            "Ocp-Apim-Subscription-Key": KEY,
             "Content-Type": "application/octet-stream"
-        },
-        data=f.read(),
-        timeout=30
-    )
+        }
 
-    if not r.ok:
-        return jsonify(error=f"Azure OCR error: {r.status_code}", details=r.text[:500]), 502
+        r = requests.post(
+            url,
+            params=params,
+            headers=headers,
+            data=f.read(),
+            timeout=30
+        )
 
-    result = r.json()
-    lines = [
-        line["text"]
-        for block in result.get("readResult", {}).get("blocks", [])
-        for line in block.get("lines", [])
-    ]
+        if not r.ok:
+            return jsonify(
+                error="Azure OCR error",
+                details=r.text[:500]
+            ), 502
 
-    return jsonify(text="\n".join(lines) or "No text found")
+        result = r.json()
+
+        lines = [
+            line.get("text", "")
+            for block in result.get("readResult", {}).get("blocks", [])
+            for line in block.get("lines", [])
+        ]
+
+        return jsonify(
+            text="\n".join(lines) or "No text found"
+        )
+
+    except requests.RequestException as e:
+        return jsonify(error=str(e)), 502
 
 
 
