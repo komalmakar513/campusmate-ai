@@ -10,7 +10,7 @@ KEY = os.getenv("AZURE_LANGUAGE_KEY", "")
 REGION = os.getenv("AI_REGION", "centralindia")
 DEMO = not (EP and KEY)
 # /home is persistent storage on Azure App Service
-DB = "/tmp/campusmate.db" if os.getenv("VERCEL") or os.path.exists("/var/task") else "campusmate.db"
+DB = "/tmp/campusmate.db" if os.path.isdir("/tmp") else "campusmate.db"
 H = {"Ocp-Apim-Subscription-Key": KEY}
 
 
