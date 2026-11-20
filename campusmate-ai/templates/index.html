@@ -41,6 +41,17 @@ li.positive{border-left-color:var(--pos)}li.negative{border-left-color:var(--neg
 li small{display:block;color:var(--mute)}
 .empty{color:var(--mute);padding:14px 0}
 pre{white-space:pre-wrap;font:inherit;margin:0}
+.timetable-scroll{overflow-x:auto;margin-top:15px;border:1px solid var(--line);border-radius:10px}
+.timetable{width:100%;min-width:760px;border-collapse:collapse;font-size:14px}
+.timetable th,.timetable td{border:1px solid var(--line);padding:9px;vertical-align:top;text-align:left}
+.timetable th{background:#dbeafe;position:sticky;top:0}
+.timetable .time-cell{font-weight:700;white-space:nowrap;background:#f4f7fc}
+.timetable-cell{display:grid;gap:3px;min-width:85px}
+.timetable-cell strong{font-size:14px}
+.timetable-cell span{color:var(--mute);font-size:12px}
+.ocr-raw{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.ocr-raw summary{font-weight:700;color:var(--mute);cursor:pointer}
+.ocr-raw[hidden]{display:none}
 </style></head><body>
 <header><div class="wrap"><h1>Campus<mark>Mate</mark> AI</h1>
 <p>Tell the college what's working and what isn't. AI reads your feedback, your notices, and translates both ways.</p>
@@ -57,8 +68,8 @@ pre{white-space:pre-wrap;font:inherit;margin:0}
  <div class="pane" id="ocr"><p class="hint">Upload a photo of a notice or timetable. AI pulls out the text.</p>
   <input type="file" id="img" accept="image/*">
 <button class="go" onclick="doOcr(this)">Read text</button>
-<div id="ocrOut"></div>
 <div id="timetableOut"></div>
+<details class="ocr-raw" id="ocrRaw" hidden><summary>Raw OCR text (debug)</summary><div id="ocrOut"></div></details>
 </div>
 
  <div class="pane" id="tr"><label for="trIn">Text to translate</label>
@@ -86,8 +97,12 @@ const sendFb=b=>run(b,async()=>{const r=await post("/api/feedback",{text:$("fbIn
 
 const doOcr = b => run(b, async () => {
   const file = $("img").files[0];
+  const rawSection = $("ocrRaw");
+  $("timetableOut").innerHTML = "";
 
   if (!file) {
+    rawSection.hidden = false;
+    rawSection.open = true;
     return plain("ocrOut", "Choose an image first.");
   }
 
@@ -97,44 +112,82 @@ const doOcr = b => run(b, async () => {
   const r = await post("/api/ocr", form, false);
 
   if (r.error) {
+    rawSection.hidden = false;
+    rawSection.open = true;
     plain("ocrOut", r.error);
-    $("timetableOut").innerHTML = "";
     return;
   }
 
   plain("ocrOut", r.text || "No text found");
+  rawSection.hidden = false;
+  rawSection.open = false;
 
   const timetable = $("timetableOut");
   timetable.innerHTML = "";
 
-  
-if (Array.isArray(r.timetable) && r.timetable.length > 0) {
+  const data = r.timetable;
+  if (data && data.valid && Array.isArray(data.rows) && data.rows.length) {
+    const days = Array.isArray(data.days) ? data.days : [];
+    const wrapper = document.createElement("div");
+    wrapper.className = "timetable-scroll";
     const table = document.createElement("table");
-    table.style.cssText = "width:100%;border-collapse:collapse;margin-top:15px;";
+    table.className = "timetable";
 
-    const columns = ["day", "time", "subject", "teacher", "room"];
+    const head = document.createElement("thead");
     const header = document.createElement("tr");
-
-    columns.forEach(col => {
+    ["Time", ...days].forEach(label => {
         const th = document.createElement("th");
-        th.textContent = col.toUpperCase();
-        th.style.cssText = "border:1px solid #ccc;padding:10px;background:#dbeafe;";
+        th.scope = "col";
+        th.textContent = label;
         header.appendChild(th);
     });
-    table.appendChild(header);
+    head.appendChild(header);
+    table.appendChild(head);
 
-    r.timetable.forEach(item => {
+    const body = document.createElement("tbody");
+    data.rows.forEach(row => {
         const tr = document.createElement("tr");
-        columns.forEach(col => {
+        const time = document.createElement("th");
+        time.scope = "row";
+        time.className = "time-cell";
+        time.textContent = row.time || "";
+        tr.appendChild(time);
+
+        days.forEach(day => {
             const td = document.createElement("td");
-            td.textContent = item[col] || "-";
-            td.style.cssText = "border:1px solid #ccc;padding:8px;";
+            const cell = row.cells && row.cells[day] || {};
+            const content = document.createElement("div");
+            content.className = "timetable-cell";
+            if (cell.subject) {
+              const subject = document.createElement("strong");
+              subject.textContent = cell.subject;
+              content.appendChild(subject);
+            }
+            if (cell.teacher) {
+              const teacher = document.createElement("span");
+              teacher.textContent = `Teacher: ${cell.teacher}`;
+              content.appendChild(teacher);
+            }
+            if (cell.room) {
+              const room = document.createElement("span");
+              room.textContent = `Room: ${cell.room}`;
+              content.appendChild(room);
+            }
+            td.appendChild(content);
             tr.appendChild(td);
         });
-        table.appendChild(tr);
+        body.appendChild(tr);
     });
-
-    timetable.appendChild(table);
+    table.appendChild(body);
+    wrapper.appendChild(table);
+    timetable.appendChild(wrapper);
+  } else {
+    const message = document.createElement("p");
+    message.className = "empty";
+    message.textContent = data && data.message
+      ? data.message
+      : "No timetable grid could be detected. The raw OCR text is available below.";
+    timetable.appendChild(message);
 }
 
 });
