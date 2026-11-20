@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 app = Flask(__name__)
-EP = os.getenv("AI_ENDPOINT", "").rstrip("/")
-KEY = os.getenv("AI_KEY", "")
+EP = os.getenv("AZURE_LANGUAGE_ENDPOINT", "").rstrip("/")
+KEY = os.getenv("AZURE_LANGUAGE_KEY", "")
 REGION = os.getenv("AI_REGION", "centralindia")
 DEMO = not (EP and KEY)
 # /home is persistent storage on Azure App Service
