@@ -82,33 +82,67 @@ def dashboard():
 
 
 
+
 def format_timetable(text):
     import re
 
+    days = {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
+    }
+
     rows = []
-    for line in text.splitlines():
-        line = line.strip()
+    current_day = ""
+    current_time = ""
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+
         if not line:
+            continue
+
+        day_match = re.match(
+            r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?$",
+            line,
+            re.IGNORECASE
+        )
+
+        if day_match:
+            current_day = days[day_match.group(1)[:3].lower()]
             continue
 
         time_match = re.search(
             r"\b\d{1,2}:\d{2}\s*(?:AM|PM)?\b",
-            line, re.I
+            line,
+            re.IGNORECASE
         )
+
+        if time_match:
+            current_time = time_match.group()
+            if line == current_time:
+                continue
+
         room_match = re.search(
-            r"\b(?:Block[-\s]*)?[A-Z]\d?[-\s]*\d{3}\b",
-            line, re.I
+            r"(?:Block[-\s]*)?[A-Z]?\d?[-\s]*\d{3}",
+            line,
+            re.IGNORECASE
         )
 
         rows.append({
-            "day": "",
-            "time": time_match.group() if time_match else "",
+            "day": current_day,
+            "time": current_time,
             "subject": line,
             "teacher": "",
             "room": room_match.group() if room_match else ""
         })
 
     return rows
+
 
 @app.post("/api/ocr")
 def ocr():
